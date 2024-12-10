@@ -1,5 +1,5 @@
 -- Create a composite type for films
-CREATE TYPE film AS (
+CREATE TYPE film_type AS (
     film TEXT,          -- The name of the film
     votes INTEGER,      -- The number of votes the film received
     rating REAL,        -- The rating of the film
@@ -7,7 +7,7 @@ CREATE TYPE film AS (
 );
 
 -- Create an ENUM type for quality_class
-CREATE TYPE quality_class AS ENUM (
+CREATE TYPE quality_class_type AS ENUM (
     'bad',              -- Rating ≤ 6
     'average',          -- Rating > 6 and ≤ 7
     'good',             -- Rating > 7 and ≤ 8
@@ -15,12 +15,12 @@ CREATE TYPE quality_class AS ENUM (
 );
 
 -- Create the actors table
-CREATE TABLE actors (
+CREATE TABLE actors_table (
     actorid TEXT NOT NULL,                    -- Unique identifier for the actor
     filmid TEXT NOT NULL,                     -- Unique identifier for the film
     current_year INTEGER NOT NULL,            -- The year being tracked
-    quality_class quality_class,             -- Actor's performance quality
-    films film[],                             -- Array of films (using the film type)
+    quality_class quality_class_type,             -- Actor's performance quality
+    films film_type[],                             -- Array of films (using the film type)
     is_active BOOLEAN,                        -- Whether the actor is currently active
     PRIMARY KEY (actorid, filmid, current_year) -- Composite primary key
 );
