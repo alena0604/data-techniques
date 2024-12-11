@@ -33,5 +33,4 @@ SELECT
 
     FROM last_year ly
     FULL OUTER JOIN this_year ty
-    ON ly.actorid = ty.actorid
-    AND ly.filmid = ty.filmid;
+    ON ly.actorid = ty.actorid;

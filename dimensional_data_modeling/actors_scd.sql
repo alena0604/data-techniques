@@ -4,6 +4,5 @@ CREATE TABLE actors_scd (
     is_active bool,
     start_date INTEGER,
     end_date INTEGER,
-    current_year INTEGER,
-    PRIMARY KEY (actorid, start_date)
+    current_year INTEGER
 );

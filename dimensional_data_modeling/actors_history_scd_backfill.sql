@@ -32,6 +32,7 @@ WITH streak_started AS (
 			2021 as current_year
          FROM streak_identified
          GROUP BY 1,2,3,4
+		 ORDER BY 1,5
      )
 
      SELECT actorid, quality_class, is_active, start_date, end_date, current_year
