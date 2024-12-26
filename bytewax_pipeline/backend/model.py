@@ -27,7 +27,11 @@ class HackerNewsModel(BaseModel):
             article_id=str(self.id),
             title=self.title or "N/A",
             url=self.url or "N/A",
-            published_at=datetime.utcfromtimestamp(self.time).strftime("%Y-%m-%d %H:%M:%S") if self.time else CURRENT_TIMESTAMP,
+            published_at=datetime.utcfromtimestamp(self.time).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            if self.time
+            else CURRENT_TIMESTAMP,
             source_name="HackerNews",
             content=self.text or "N/A",
             author=self.by or None,
@@ -39,6 +43,7 @@ class CommonDocument(BaseModel):
     A generalized document structure that can represent articles
     from various news sources in a uniform manner.
     """
+
     article_id: str = Field(default_factory=lambda: str(uuid4()))
     title: str = "N/A"
     url: Optional[str] = "N/A"

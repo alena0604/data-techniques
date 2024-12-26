@@ -4,3 +4,4 @@ bytewax==0.21.0
 requests==2.32.3
 pre-commit==3.8.0
 streamlit==1.38.0
+ruff==0.6.9

@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime, timedelta
 import time
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from bytewax.inputs import SimplePollingSource
 from bytewax.connectors.stdio import StdOutSink
 import bytewax.operators as op
@@ -9,16 +9,17 @@ from bytewax.dataflow import Dataflow
 import logging
 from bytewax_pipeline.backend.model import HackerNewsModel
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Constants for formatting
-CURRENT_TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+# Constants
+HN_MAX_ITEM_URL = "https://hacker-news.firebaseio.com/v0/maxitem.json"
+HN_ITEM_URL_TEMPLATE = "https://hacker-news.firebaseio.com/v0/item/{hn_id}.json"
+FETCH_INTERVAL_SECONDS = 15
 
 
-# Hacker News Fetching Logic
-
-
+# Hacker News Input Source
 class HackerNewsInput(SimplePollingSource):
     def __init__(
         self,
@@ -27,41 +28,62 @@ class HackerNewsInput(SimplePollingSource):
         init_item: Optional[int] = None,
     ):
         super().__init__(interval, align_to)
-        logger.info(f"Starting with item ID: {init_item}")
         self.max_id = init_item
+        logger.info(f"Initializing HackerNewsInput with starting item ID: {init_item}")
 
-    def next_item(self):
+    def next_item(self) -> List[int]:
         """
-        Get all new items from Hacker News API between
-        the last known max ID and the current max ID.
+        Fetch new item IDs from the Hacker News API between the last known max ID and the current max ID.
         """
         if not self.max_id:
-            self.max_id = requests.get(
-                "https://hacker-news.firebaseio.com/v0/maxitem.json"
-            ).json()
+            self.max_id = self._fetch_max_id()
 
-        new_max_id = requests.get(
-            "https://hacker-news.firebaseio.com/v0/maxitem.json"
-        ).json()
+        new_max_id = self._fetch_max_id()
         logger.info(f"Fetching articles between {self.max_id} and {new_max_id}")
-        ids = [int(i) for i in range(self.max_id, new_max_id)]
+
+        if self.max_id >= new_max_id:
+            return []  # No new items
+
+        ids = list(range(self.max_id + 1, new_max_id + 1))
         self.max_id = new_max_id
         return ids
 
+    @staticmethod
+    def _fetch_max_id() -> int:
+        """
+        Fetch the maximum item ID from Hacker News API.
+        """
+        try:
+            response = requests.get(HN_MAX_ITEM_URL, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            logger.error(f"Error fetching max ID: {e}")
+            time.sleep(5)
+            return HackerNewsInput._fetch_max_id()
 
-def download_metadata(hn_id):
+
+# Fetch Article Metadata
+def download_metadata(hn_id: int) -> Dict[str, Any]:
     """
-    Given a Hacker News ID, fetch the metadata from the Hacker News API.
+    Fetch metadata for a given Hacker News ID.
     """
-    req = requests.get(f"https://hacker-news.firebaseio.com/v0/item/{hn_id}.json")
-    if not req.json():
-        logger.warning(f"Error retrieving item {hn_id}, retrying...")
-        time.sleep(0.5)
-        return download_metadata(hn_id)
-    return req.json()
+    url = HN_ITEM_URL_TEMPLATE.format(hn_id=hn_id)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if not data:
+            logger.warning(f"No data found for item ID {hn_id}. Skipping.")
+            return {}
+        return data
+    except requests.RequestException as e:
+        logger.error(f"Error fetching metadata for item ID {hn_id}: {e}")
+        return {}
 
 
-def run_hn_flow(init_item):
+# Bytewax Dataflow
+def run_hn_flow(init_item: Optional[int] = None) -> Dataflow:
     """
     Define the Bytewax dataflow for processing Hacker News articles.
     """
@@ -71,17 +93,12 @@ def run_hn_flow(init_item):
     inp = op.input(
         "input", flow, HackerNewsInput(timedelta(seconds=15), None, init_item)
     )
-    # op.inspect("inspect_fetched_articles", inp)
 
     # Flatten the list of article IDs
     article_ids = op.flat_map("flatten_ids", inp, lambda ids: ids)
 
-    # op.inspect("flatten_ids_dbg", article_ids)
-
     # Fetch metadata for each article ID
     article_metadata = op.map("fetch_metadata", article_ids, download_metadata)
-
-    # op.inspect("fetch_metadata_dbg", article_metadata)
 
     # Convert metadata to HackerNewsModel, then transform to CommonDocument
     common_docs = op.map(
@@ -89,9 +106,6 @@ def run_hn_flow(init_item):
         article_metadata,
         lambda metadata: HackerNewsModel(**metadata).to_common(),
     )
-
-    # Inspect the processed CommonDocument
-    # op.inspect("processed_common_document", common_docs)
 
     op.output("std-out", common_docs, StdOutSink())
 
